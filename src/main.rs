@@ -1,9 +1,10 @@
-use std::{io::{stdout}, time::{Instant, Duration}};
+use std::{io::{stdout, Write}, time::{Instant, Duration}};
 use crossterm::{
 	execute, Result, 
 	terminal::{self, enable_raw_mode, ClearType, LeaveAlternateScreen, EnterAlternateScreen},
 	cursor, 
-	event::{poll, read, Event, KeyEvent, KeyCode}
+	event::{poll, read, Event, KeyEvent, KeyCode},
+	style::{self, Color}
 };
 use rand::{thread_rng, seq::SliceRandom};
 
@@ -173,6 +174,56 @@ fn freeze(board : &mut [[bool; WIDTH]; HEIGHT], block : &Block) -> usize {
 	cleared_rows
 }
 
+fn add_score(rows : usize, level : &mut usize, score : &mut usize, cleared_rows : &mut usize, delay : &mut Duration) {
+	if rows == 0 { 
+		return; 
+	}
+	
+	*score += *level * match rows {
+		1 => 100,
+		2 => 300,
+		3 => 500,
+		4 => 800,
+		_ => unreachable!("Not possible to clear more than 4 rows")
+	};
+	*cleared_rows += rows;
+	let target_rows = match *level {
+		1 => 10,
+		2 => 30,
+		3 => 70,
+		4 => 120,
+		5 => 180,
+		6 => 250,
+		7 => 330,
+		8 => 420,
+		9 => 520,
+		10 => 620,
+		11 => 720,
+		12 => 820,
+		13 => 920,
+		14 => 1020,
+		15 => 1120,
+		16 => 1230,
+		17 => 1350,
+		18 => 1480,
+		19 => 1620,
+		20 => 1770,
+		21 => 1930,
+		22 => 2100,
+		23 => 2280,
+		24 => 2470,
+		25 => 2670,
+		26 => 2870,
+		27 => 3070,
+		28 => 3270,
+		29 => usize::MAX,
+		_ => unreachable!("Invalid level")
+	};
+	if *cleared_rows >= target_rows {
+		*level += 1;
+		*delay = Duration::from_millis(827 - 27 * (*level as u64));
+	}
+}
 
 fn print_board(board : &[[bool; WIDTH]; HEIGHT], block : &Option<Block>) -> Result<()>{
 	execute!(stdout(), cursor::MoveTo(0, 0))?;
@@ -201,7 +252,7 @@ fn print_board(board : &[[bool; WIDTH]; HEIGHT], block : &Option<Block>) -> Resu
 	Ok(())
 }
 
-fn print_next_block(block : &Block) -> Result<()> {
+fn print_ui(block : &Block, score : usize, rows : usize, level : usize, delay : Duration) -> Result<()> {
 	execute!(stdout(), cursor::MoveTo(20, 0))?;
 	print!("NEXT:");
 	execute!(stdout(), cursor::MoveTo(18, 2))?;
@@ -217,14 +268,49 @@ fn print_next_block(block : &Block) -> Result<()> {
 		}
 		execute!(stdout(), cursor::MoveToColumn(18), cursor::MoveDown(1))?;
 	}
+	execute!(stdout(), cursor::MoveTo(19, 8))?;
+	print!("Score: {}", score);
+	execute!(stdout(), cursor::MoveTo(19, 9))?;
+	print!("Level: {}", level);
+	execute!(stdout(), cursor::MoveTo(19, 10))?;
+	print!("Lines: {}", rows);
+	execute!(stdout(), cursor::MoveTo(19, 11))?;
+	print!("Delay: {:?}", delay);
 	Ok(())
+}
+
+fn print_game_over(score : usize, level : usize) -> Result<bool> {
+	execute!(stdout(), terminal::Clear(ClearType::All), cursor::MoveTo(10, 3))?;
+	print!("Game Over");
+	execute!(stdout(), cursor::MoveTo(10, 5))?;
+	print!("Score : {}", score);
+	execute!(stdout(), cursor::MoveTo(10, 7))?;
+	print!("Level : {}", level);
+	execute!(stdout(), cursor::MoveTo(6, 9))?;
+	print!("Press R to play again");
+	execute!(stdout(), cursor::MoveTo(7, 11))?;
+	print!("Press esc to exit");
+	stdout().flush()?;
+	let res = loop {
+		match read() {
+			Ok(Event::Key(KeyEvent {
+				code : KeyCode::Esc, ..
+			})) => break Ok(false),
+			Ok(Event::Key(KeyEvent {
+				code : KeyCode::Char('r'), ..
+			})) => break Ok(true),
+			_ => ()
+		}
+	};
+	execute!(stdout(), terminal::Clear(ClearType::All))?;
+	res
 }
 
 fn handle_key(board : &[[bool; WIDTH]; HEIGHT], block : &mut Option<Block>) -> KeyAction {
 	if let Ok(true) = poll(Duration::from_millis(1)) {
 		let event = read();
 		match event {
-			Ok(Event::Key (KeyEvent {
+			Ok(Event::Key(KeyEvent {
 				code : keycode, ..
 			})) => match (keycode, block.as_mut()) {
 					(KeyCode::Esc, _) => KeyAction::Exit,
@@ -264,7 +350,7 @@ fn main() -> Result<()> {
 	let mut block = Some(create_block(bag[0]));
 	let mut next_block = create_block(bag[1]);
 
-	let delay = Duration::from_millis(800);
+	let mut delay = Duration::from_millis(800);
 	let lock_delay = Duration::from_millis(500);
 	let soft_drop_delay = Duration::from_millis(100);
 	let mut active_delay = delay;
@@ -275,9 +361,13 @@ fn main() -> Result<()> {
 	let mut soft_drop = false;
 	let mut soft_drop_instant = Instant::now();
 	let soft_drop_duration = Duration::from_millis(100);
+	
+	let mut score = 0;
+	let mut line_clears = 0;
+	let mut level = 1;
 
 	let mut lock_actions = None;
-	print_next_block(&next_block)?;
+	print_ui(&next_block, score, line_clears, level, delay)?;
 	while running {
 		print_board(&board, &block)?;
 		time = Instant::now();
@@ -311,7 +401,8 @@ fn main() -> Result<()> {
 				},
 				KeyAction::Drop(true) => {
 					lock_actions = None;
-					freeze(&mut board, &block.unwrap());
+					let rows = freeze(&mut board, &block.unwrap());
+					add_score(rows, &mut level, &mut score, &mut line_clears, &mut delay);
 					block = None;
 					break;
 				}
@@ -319,12 +410,13 @@ fn main() -> Result<()> {
 			};
 		}
 		if let Some(_) = lock_actions {
+			if !move_block(&board, block.as_mut().unwrap(), 0, 1) {
+				let rows = freeze(&mut board, &block.unwrap());
+				add_score(rows, &mut level, &mut score, &mut line_clears, &mut delay);
+				block = None;
+			}
 			if !soft_drop {
 				active_delay = delay;
-			}
-			if !move_block(&board, block.as_mut().unwrap(), 0, 1) {
-				freeze(&mut board, &block.unwrap());
-				block = None;
 			}
 			lock_actions = None;
 		} else if let Some(b) = block.as_mut() {
@@ -340,9 +432,28 @@ fn main() -> Result<()> {
 				bag_index = 0;
 				bag.shuffle(&mut rng);
 			}
+			if overlapps(&board, &next_block) {
+				if let Ok(true) = print_game_over(score, level) {
+					bag.shuffle(&mut rng);
+					next_block = create_block(bag[0]);
+					block = Some(create_block(bag[1]));
+					bag_index = 1;
+					score = 0;
+					level = 1;
+					line_clears = 0;
+					delay = Duration::from_millis(800);
+					soft_drop = false;
+					active_delay = delay;
+					board = [[false; WIDTH]; HEIGHT];
+					print_ui(&next_block, score, line_clears, level, delay)?;
+					continue;
+				} else {
+					break;
+				}
+			}
 			block = Some(next_block);
 			next_block = create_block(bag[bag_index]);
-			print_next_block(&next_block)?
+			print_ui(&next_block, score, line_clears, level, delay)?;
 		}	
 	}
 	execute!(stdout(), LeaveAlternateScreen, cursor::Show)?;

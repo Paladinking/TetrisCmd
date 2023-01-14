@@ -4,7 +4,7 @@ use crossterm::{
 	terminal::{self, enable_raw_mode, ClearType, LeaveAlternateScreen, EnterAlternateScreen},
 	cursor, 
 	event::{poll, read, Event, KeyEvent, KeyCode},
-	style::{self, Color}
+	style::{self, Color, Stylize}
 };
 use rand::{thread_rng, seq::SliceRandom};
 
@@ -18,7 +18,7 @@ enum BlockType {
 
 
 struct Block {
-	tiles : [Vec<Vec<bool>>; 4],
+	tiles : [Vec<Vec<Option<Color>>>; 4],
 	rotation : usize,
 	x_pos : isize,
 	y_pos : isize,
@@ -29,9 +29,22 @@ enum KeyAction {
 	None, Drop(bool), Move(bool), Exit 
 }
 
+fn color_map(tiles : [Vec<Vec<bool>>; 4], color : Color) -> [Vec<Vec<Option<Color>>>; 4] {
+	let it = tiles.into_iter().map(|shape| 
+		shape.into_iter().map(|row| row.into_iter().map(|b| 
+			if b {Some(color)} else {None}).collect::<Vec<Option<Color>>>()
+		).collect::<Vec<Vec<Option<Color>>>>()
+	);
+	let mut shapes : [Vec<Vec<Option<Color>>>; 4] = [vec![], vec![], vec![], vec![]];
+	for (index, value) in it.enumerate() {
+		shapes[index] = value;
+	}
+	return shapes;
+}
+
 fn create_block(name : BlockType) -> Block {
 	let tiles = match name {
-		BlockType::I => [
+		BlockType::I => color_map([
 			vec![vec![false, false, false, false], vec![true, true, true, true],
 				vec![false, false, false, false], vec![false, false, false, false]],
 			vec![vec![false, false, true, false], vec![false, false, true, false],
@@ -40,49 +53,49 @@ fn create_block(name : BlockType) -> Block {
 				vec![true, true, true, true], vec![false, false, false, false]],
 			vec![vec![false, true, false, false], vec![false, true, false, false],
 				vec![false, true, false, false], vec![false, true, false, false]]
-		],
-		BlockType::J => [
+		], Color::Rgb{r : 0, g : 255, b: 255}),
+		BlockType::J => color_map([
 			vec![vec![true, false, false], vec![true, true, true], vec![false, false, false]],
 			vec![vec![false, true, true], vec![false, true, false], vec![false, true, false]],
 			vec![vec![false, false, false], vec![true, true, true], vec![false, false, true]],
 			vec![vec![false, true, false], vec![false, true, false], vec![true, true, false]]
-		],
-		BlockType::L =>  [
+		], Color::Blue),
+		BlockType::L =>  color_map([
 			vec![vec![false, false, true], vec![true, true, true], vec![false, false, false]],
 			vec![vec![false, true, false], vec![false, true, false], vec![false, true, true]],
 			vec![vec![false, false, false], vec![true, true, true], vec![true, false, false]],
 			vec![vec![true, true, false], vec![false, true, false], vec![false, true, false]]
-		],
-		BlockType::O => [
+		], Color::Rgb{r: 255, g: 127, b: 0}),
+		BlockType::O => color_map([
 			vec![vec![true, true], vec![true, true]],
 			vec![vec![true, true], vec![true, true]],
 			vec![vec![true, true], vec![true, true]],
 			vec![vec![true, true], vec![true, true]]
-		],
-		BlockType::S => [
+		], Color::Yellow),
+		BlockType::S => color_map([
 			vec![vec![false, true, true], vec![true, true, false], vec![false, false, false]],
 			vec![vec![false, true, false], vec![false, true, true], vec![false, false, true]],
 			vec![vec![false, false, false], vec![false, true, true], vec![true, true, false]],
 			vec![vec![true, false, false], vec![true, true, false], vec![false, true, false]]
-		],
-		BlockType::T =>  [
+		], Color::Green),
+		BlockType::T =>  color_map([
 			vec![vec![false, true, false], vec![true, true, true], vec![false, false, false]],
 			vec![vec![false, true, false], vec![false, true, true], vec![false, true, false]],
 			vec![vec![false, false, false], vec![true, true, true], vec![false, true, false]],
 			vec![vec![false, true, false], vec![true, true, false], vec![false, true, false]]
-		],
-		BlockType::Z => [
+		], Color::Red),
+		BlockType::Z => color_map([
 			vec![vec![true, true, false], vec![false, true, true], vec![false, false, false]],
 			vec![vec![false, false, true], vec![false, true, true], vec![false, true, false]],
 			vec![vec![false, false, false], vec![true, true, false], vec![false, true, true]],
 			vec![vec![false, true, false], vec![true, true, false], vec![true, false, false]]
-		]
+		], Color::Rgb{r: 128, g: 0, b: 128})
 	};
 	let x = (WIDTH - tiles[0].len()) / 2;
 	Block {tiles, rotation : 0, x_pos : x as isize, y_pos : 0, name}
 }
 
-fn rotate(board : &[[bool; WIDTH]; HEIGHT], block : &mut Block, clockwise : bool) -> bool {
+fn rotate(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Block, clockwise : bool) -> bool {
 	block.rotation = if clockwise {(block.rotation + 1) % 4} else {(block.rotation + 3) % 4};
 	let kicks = match block.name {
 		BlockType::O => [(0, 0), (0, 0), (0, 0), (0, 0), (0, 0)],
@@ -116,7 +129,7 @@ fn rotate(board : &[[bool; WIDTH]; HEIGHT], block : &mut Block, clockwise : bool
 	block.rotation = if clockwise {(block.rotation + 3) % 4} else {(block.rotation + 1) % 4};
 	return false;
 }
-fn move_block(board : &[[bool; WIDTH]; HEIGHT], block : &mut Block, dx : isize, dy : isize) -> bool {
+fn move_block(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Block, dx : isize, dy : isize) -> bool {
 	block.x_pos += dx;
 	block.y_pos += dy;
 	if overlapps(board, block) {
@@ -133,11 +146,13 @@ fn in_bounds(block : &Block, x : usize, y : usize) -> bool {
 	return x >= 0 && y >= 0 && (x as usize) < WIDTH && (y as usize) < HEIGHT;
 }
 
-fn overlapps(board : &[[bool; WIDTH]; HEIGHT], block : &Block) -> bool {
+fn overlapps(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Block) -> bool {
 	for y in 0..block.tiles[block.rotation].len() {
 		for x in 0..block.tiles[block.rotation][y].len() {
-			if block.tiles[block.rotation][y][x] {
-				if !in_bounds(block, x, y) || board[(y as isize + block.y_pos) as usize][(x as isize + block.x_pos) as usize] {
+			if block.tiles[block.rotation][y][x].is_some() {
+				if !in_bounds(block, x, y) || 
+					board[(y as isize + block.y_pos) as usize][(x as isize + block.x_pos) as usize].is_some() 
+				{
 					return true;
 				}
 			}
@@ -146,25 +161,26 @@ fn overlapps(board : &[[bool; WIDTH]; HEIGHT], block : &Block) -> bool {
 	false
 }
 
-fn freeze(board : &mut [[bool; WIDTH]; HEIGHT], block : &Block) -> usize {
+fn freeze(board : &mut [[Option<Color>; WIDTH]; HEIGHT], block : &Block) -> usize {
 	for y in 0..block.tiles[block.rotation].len() {
 		for x in 0..block.tiles[block.rotation][y].len() {
 			if !in_bounds(&block, x, y) {
 				continue;
 			}
-			if block.tiles[block.rotation][y][x] {
-				board[(y as isize + block.y_pos) as usize][(x as isize + block.x_pos) as usize] = true;
+			let tile = block.tiles[block.rotation][y][x];
+			if tile.is_some() {
+				board[(y as isize + block.y_pos) as usize][(x as isize + block.x_pos) as usize] = tile;
 			}
 		}
 	}
 	let mut cleared_rows = 0;
 	let mut index = board.len() - 1;
 	while {
-		if board[index].iter().all(|tile| *tile) {
+		if board[index].iter().all(|tile| tile.is_some()) {
 			for i in (1..(index + 1)).rev() {
 				board.copy_within((i - 1)..(i), i);
 			}
-			board[0].fill(false);
+			board[0].fill(None);
 			cleared_rows += 1;
 		} else {
 			index -= 1;
@@ -224,8 +240,8 @@ fn add_score(rows : usize, level : &mut usize, score : &mut usize, cleared_rows 
 		*delay = Duration::from_millis(827 - 27 * (*level as u64));
 	}
 }
-
-fn print_board(board : &[[bool; WIDTH]; HEIGHT], block : &Option<Block>) -> Result<()>{
+// ▓▓, ██
+fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>) -> Result<()>{
 	execute!(stdout(), cursor::MoveTo(0, 0))?;
 	println!("##################");
 	for (y, row) in board.iter().enumerate() {
@@ -237,14 +253,19 @@ fn print_board(board : &[[bool; WIDTH]; HEIGHT], block : &Option<Block>) -> Resu
 				let tiles = &b.tiles[b.rotation];
 				if 
 					yi >= b.y_pos && yi < b.y_pos + tiles.len() as isize &&
-					xi >= b.x_pos && xi < b.x_pos + tiles[0].len() as isize &&
-					tiles[(yi - b.y_pos) as usize][(xi - b.x_pos) as usize]
+					xi >= b.x_pos && xi < b.x_pos + tiles[0].len() as isize
 				{
-					print!("▓▓");
-					continue;
+					if let Some(color) = tiles[(yi - b.y_pos) as usize][(xi - b.x_pos) as usize] {
+						print!("{}", "██".with(color));
+						continue;
+					}
 				}
 			}
-			print!("{}", if *c {"██"} else {"  "});
+			if let Some(color) = *c {
+				print!("{}", "██".with(color));
+			} else {
+				print!("  ");
+			}
 		}
 		println!("#");
 	}
@@ -264,7 +285,12 @@ fn print_ui(block : &Block, score : usize, rows : usize, level : usize, delay : 
 	for row in &block.tiles[block.rotation] {
 		print!("  ");
 		for col in row {
-			print!("{}", if *col {"▓▓"} else {"  "}); 
+			if let Some(color) = col {
+				print!("{}", "██".with(*color));
+			} else {
+				print!("  ");
+			}
+			
 		}
 		execute!(stdout(), cursor::MoveToColumn(18), cursor::MoveDown(1))?;
 	}
@@ -306,7 +332,7 @@ fn print_game_over(score : usize, level : usize) -> Result<bool> {
 	res
 }
 
-fn handle_key(board : &[[bool; WIDTH]; HEIGHT], block : &mut Option<Block>) -> KeyAction {
+fn handle_key(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Option<Block>) -> KeyAction {
 	if let Ok(true) = poll(Duration::from_millis(1)) {
 		let event = read();
 		match event {
@@ -345,7 +371,7 @@ fn main() -> Result<()> {
 	let mut bag_index = 1;
 	bag.shuffle(&mut rng);
 
-	let mut board : [[bool; WIDTH]; HEIGHT] = [[false; WIDTH]; HEIGHT];
+	let mut board : [[Option<Color>; WIDTH]; HEIGHT] = [[None; WIDTH]; HEIGHT];
 	
 	let mut block = Some(create_block(bag[0]));
 	let mut next_block = create_block(bag[1]);
@@ -444,7 +470,7 @@ fn main() -> Result<()> {
 					delay = Duration::from_millis(800);
 					soft_drop = false;
 					active_delay = delay;
-					board = [[false; WIDTH]; HEIGHT];
+					board = [[None; WIDTH]; HEIGHT];
 					print_ui(&next_block, score, line_clears, level, delay)?;
 					continue;
 				} else {

@@ -1,10 +1,12 @@
-use std::{io::{stdout, Write}, time::{Instant, Duration}};
+use std::{env, io::{stdout, Write}, time::{Instant, Duration}};
 use crossterm::{
-	execute, Result, 
-	terminal::{self, enable_raw_mode, ClearType, LeaveAlternateScreen, EnterAlternateScreen},
+	execute,
+	queue,
+	Result, 
+	terminal::{self, ClearType, LeaveAlternateScreen, EnterAlternateScreen},
 	cursor, 
 	event::{poll, read, Event, KeyEvent, KeyCode},
-	style::{self, Color, Stylize}
+	style::{Color, Stylize}
 };
 use rand::{thread_rng, seq::SliceRandom};
 
@@ -83,13 +85,13 @@ fn create_block(name : BlockType) -> Block {
 			vec![vec![false, true, false], vec![false, true, true], vec![false, true, false]],
 			vec![vec![false, false, false], vec![true, true, true], vec![false, true, false]],
 			vec![vec![false, true, false], vec![true, true, false], vec![false, true, false]]
-		], Color::Red),
+		], Color::Rgb{r: 128, g: 0, b: 128}),
 		BlockType::Z => color_map([
 			vec![vec![true, true, false], vec![false, true, true], vec![false, false, false]],
 			vec![vec![false, false, true], vec![false, true, true], vec![false, true, false]],
 			vec![vec![false, false, false], vec![true, true, false], vec![false, true, true]],
 			vec![vec![false, true, false], vec![true, true, false], vec![true, false, false]]
-		], Color::Rgb{r: 128, g: 0, b: 128})
+		], Color::Red)
 	};
 	let x = (WIDTH - tiles[0].len()) / 2;
 	Block {tiles, rotation : 0, x_pos : x as isize, y_pos : 0, name}
@@ -129,6 +131,7 @@ fn rotate(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Block, clockwi
 	block.rotation = if clockwise {(block.rotation + 3) % 4} else {(block.rotation + 1) % 4};
 	return false;
 }
+
 fn move_block(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Block, dx : isize, dy : isize) -> bool {
 	block.x_pos += dx;
 	block.y_pos += dy;
@@ -240,10 +243,11 @@ fn add_score(rows : usize, level : &mut usize, score : &mut usize, cleared_rows 
 		*delay = Duration::from_millis(827 - 27 * (*level as u64));
 	}
 }
-// ▓▓, ██
-fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>) -> Result<()>{
-	execute!(stdout(), cursor::MoveTo(0, 0))?;
-	println!("##################");
+
+fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>, use_color : bool) -> Result<()>{
+	queue!(stdout(), cursor::MoveTo(0, 0))?;
+	print!("##################");
+	queue!(stdout(), cursor::MoveToNextLine(1))?;
 	for (y, row) in board.iter().enumerate() {
 		print!("#");
 		for (x, c) in row.iter().enumerate() {
@@ -256,65 +260,80 @@ fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>
 					xi >= b.x_pos && xi < b.x_pos + tiles[0].len() as isize
 				{
 					if let Some(color) = tiles[(yi - b.y_pos) as usize][(xi - b.x_pos) as usize] {
-						print!("{}", "██".with(color));
+						if use_color {
+							print!("{}", "██".with(color));
+						} else {
+							print!("▓▓");
+						}
 						continue;
 					}
 				}
 			}
 			if let Some(color) = *c {
-				print!("{}", "██".with(color));
+				if use_color {
+					print!("{}", "██".with(color));
+				} else {
+					print!("██");
+				}
 			} else {
 				print!("  ");
 			}
 		}
-		println!("#");
+		print!("#");
+		queue!(stdout(), cursor::MoveToNextLine(1))?;
 	}
-	println!("##################");
+	print!("##################");
+	execute!(stdout(), cursor::MoveToNextLine(1))?;
 	Ok(())
 }
 
-fn print_ui(block : &Block, score : usize, rows : usize, level : usize, delay : Duration) -> Result<()> {
-	execute!(stdout(), cursor::MoveTo(20, 0))?;
+fn print_ui(block : &Block, score : usize, rows : usize, level : usize, delay : Duration, use_color : bool) -> Result<()> {
+	queue!(stdout(), cursor::MoveTo(20, 0))?;
 	print!("NEXT:");
-	execute!(stdout(), cursor::MoveTo(18, 2))?;
+	queue!(stdout(), cursor::MoveTo(18, 2))?;
 	for _ in 0..5{
 		print!("                 ");
-		execute!(stdout(), cursor::MoveToColumn(18), cursor::MoveDown(1))?;
+		queue!(stdout(), cursor::MoveToColumn(18), cursor::MoveDown(1))?;
 	}
-	execute!(stdout(), cursor::MoveTo(18, 2))?;
+	queue!(stdout(), cursor::MoveTo(18, 2))?;
 	for row in &block.tiles[block.rotation] {
 		print!("  ");
 		for col in row {
 			if let Some(color) = col {
-				print!("{}", "██".with(*color));
+				if use_color {
+					print!("{}", "██".with(*color));
+				} else {
+					print!("▓▓");
+				}
 			} else {
 				print!("  ");
 			}
 			
 		}
-		execute!(stdout(), cursor::MoveToColumn(18), cursor::MoveDown(1))?;
+		queue!(stdout(), cursor::MoveToColumn(18), cursor::MoveDown(1))?;
 	}
-	execute!(stdout(), cursor::MoveTo(19, 8))?;
+	queue!(stdout(), cursor::MoveTo(19, 8))?;
 	print!("Score: {}", score);
-	execute!(stdout(), cursor::MoveTo(19, 9))?;
+	queue!(stdout(), cursor::MoveTo(19, 9))?;
 	print!("Level: {}", level);
-	execute!(stdout(), cursor::MoveTo(19, 10))?;
+	queue!(stdout(), cursor::MoveTo(19, 10))?;
 	print!("Lines: {}", rows);
-	execute!(stdout(), cursor::MoveTo(19, 11))?;
+	queue!(stdout(), cursor::MoveTo(19, 11))?;
 	print!("Delay: {:?}", delay);
+	stdout().flush()?;
 	Ok(())
 }
 
 fn print_game_over(score : usize, level : usize) -> Result<bool> {
-	execute!(stdout(), terminal::Clear(ClearType::All), cursor::MoveTo(10, 3))?;
+	queue!(stdout(), terminal::Clear(ClearType::All), cursor::MoveTo(10, 3))?;
 	print!("Game Over");
-	execute!(stdout(), cursor::MoveTo(10, 5))?;
+	queue!(stdout(), cursor::MoveTo(10, 5))?;
 	print!("Score : {}", score);
-	execute!(stdout(), cursor::MoveTo(10, 7))?;
+	queue!(stdout(), cursor::MoveTo(10, 7))?;
 	print!("Level : {}", level);
-	execute!(stdout(), cursor::MoveTo(6, 9))?;
+	queue!(stdout(), cursor::MoveTo(6, 9))?;
 	print!("Press R to play again");
-	execute!(stdout(), cursor::MoveTo(7, 11))?;
+	queue!(stdout(), cursor::MoveTo(7, 11))?;
 	print!("Press esc to exit");
 	stdout().flush()?;
 	let res = loop {
@@ -332,7 +351,7 @@ fn print_game_over(score : usize, level : usize) -> Result<bool> {
 	res
 }
 
-fn handle_key(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Option<Block>) -> KeyAction {
+fn handle_key(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Option<Block>, rotation_dir : bool) -> KeyAction {
 	if let Ok(true) = poll(Duration::from_millis(1)) {
 		let event = read();
 		match event {
@@ -340,8 +359,8 @@ fn handle_key(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Option<Blo
 				code : keycode, ..
 			})) => match (keycode, block.as_mut()) {
 					(KeyCode::Esc, _) => KeyAction::Exit,
-					(KeyCode::Up, Some(block)) => KeyAction::Move(rotate(&board, block, true)),
-					(KeyCode::Char('z'), Some(block)) => KeyAction::Move(rotate(&board, block, false)),
+					(KeyCode::Up, Some(block)) => KeyAction::Move(rotate(&board, block, rotation_dir)),
+					(KeyCode::Char('z'), Some(block)) => KeyAction::Move(rotate(&board, block, !rotation_dir)),
 					(KeyCode::Down, _) => KeyAction::Drop(false),
 					(KeyCode::Left, Some(block)) => KeyAction::Move(move_block(&board, block, -1, 0)),
 					(KeyCode::Right, Some(block)) => KeyAction::Move(move_block(&board, block, 1, 0)),
@@ -360,8 +379,12 @@ fn handle_key(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Option<Blo
 
 
 fn main() -> Result<()> {
+
+	let use_color = !env::args().any(|s| s == "--no-color");
+	let inverse_rotation = env::args().any(|s| s == "--inverse-rotation");
+
 	let mut rng = thread_rng();
-	enable_raw_mode()?;
+	terminal::enable_raw_mode()?;
 	execute!(stdout(), 
 		EnterAlternateScreen,
 		cursor::Hide,
@@ -393,9 +416,9 @@ fn main() -> Result<()> {
 	let mut level = 1;
 
 	let mut lock_actions = None;
-	print_ui(&next_block, score, line_clears, level, delay)?;
+	print_ui(&next_block, score, line_clears, level, delay, use_color)?;
 	while running {
-		print_board(&board, &block)?;
+		print_board(&board, &block, use_color)?;
 		time = Instant::now();
 		if soft_drop && soft_drop_instant.elapsed() >= soft_drop_duration { // This does not work very well..
 			soft_drop = false;
@@ -406,7 +429,7 @@ fn main() -> Result<()> {
 			}
 		}
 		while time.elapsed() < active_delay {
-			match handle_key(&board, &mut block) {
+			match handle_key(&board, &mut block, !inverse_rotation) {
 				KeyAction::Exit => {
 					running = false;
 					break;
@@ -418,7 +441,7 @@ fn main() -> Result<()> {
 							time = Instant::now();
 						}
 					}
-					print_board(&board, &block)?;
+					print_board(&board, &block, use_color)?;
 				},
 				KeyAction::Drop(false) => {
 					active_delay = soft_drop_delay;
@@ -471,7 +494,7 @@ fn main() -> Result<()> {
 					soft_drop = false;
 					active_delay = delay;
 					board = [[None; WIDTH]; HEIGHT];
-					print_ui(&next_block, score, line_clears, level, delay)?;
+					print_ui(&next_block, score, line_clears, level, delay, use_color)?;
 					continue;
 				} else {
 					break;
@@ -479,9 +502,10 @@ fn main() -> Result<()> {
 			}
 			block = Some(next_block);
 			next_block = create_block(bag[bag_index]);
-			print_ui(&next_block, score, line_clears, level, delay)?;
+			print_ui(&next_block, score, line_clears, level, delay, use_color)?;
 		}	
 	}
 	execute!(stdout(), LeaveAlternateScreen, cursor::Show)?;
+	terminal::disable_raw_mode()?;
 	Ok(())
 }

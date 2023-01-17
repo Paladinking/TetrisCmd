@@ -28,7 +28,7 @@ struct Block {
 }
 
 enum KeyAction {
-	None, Drop(bool), Move(bool), Exit 
+	None, Drop(bool), Move(bool), Pause, Exit 
 }
 
 fn color_map(tiles : [Vec<Vec<bool>>; 4], color : Color) -> [Vec<Vec<Option<Color>>>; 4] {
@@ -244,8 +244,7 @@ fn add_score(rows : usize, level : &mut usize, score : &mut usize, cleared_rows 
 		let pw = 800.0 * base * base.powi(-(*level as i32));
 		*delay = Duration::from_millis(pw as u64);
 	}
-}// A * B ^ (-1) == 800 <=> -1 == log(B, 800 / A) <=> A / B == 800 <=> A == 800B
-// A * B ^ (-30) == 17 <=> -30 == log(800A, 17 / A) 
+}
 
 fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>, use_color : bool) -> Result<()>{
 	queue!(stdout(), cursor::MoveTo(0, 0))?;
@@ -323,7 +322,42 @@ fn print_ui(block : &Block, score : usize, rows : usize, level : usize, delay : 
 	print!("Lines: {}", rows);
 	queue!(stdout(), cursor::MoveTo(19, 11))?;
 	print!("Delay: {:?}", delay);
+	queue!(stdout(), cursor::MoveTo(23, 13))?;
+	print!("Controls:");
+	queue!(stdout(), cursor::MoveTo(19, 15))?;
+	print!("Rotate clockwise : Up arrow");
+	queue!(stdout(), cursor::MoveTo(19, 16))?;
+	print!("Rotate counter-clockwise : Z");
+	queue!(stdout(), cursor::MoveTo(19, 17))?;
+	print!("Soft drop : Down arrow");
+	queue!(stdout(), cursor::MoveTo(19, 18))?;
+	print!("Hard drop : Space");
+	queue!(stdout(), cursor::MoveTo(19, 19))?;
+	print!("Move left : Left arrow");
+	queue!(stdout(), cursor::MoveTo(19, 20))?;
+	print!("Move right : Right arrow");
+	queue!(stdout(), cursor::MoveTo(19, 21))?;
+	print!("Pause : P");
+	queue!(stdout(), cursor::MoveTo(19, 22))?;
+	print!("Exit : Esc");
 	stdout().flush()?;
+	Ok(())
+}
+
+fn pause() -> Result<()> {
+	queue!(stdout(), cursor::MoveTo(2, 10), terminal::Clear(ClearType::All))?;
+	print!("Game is Paused");
+	stdout().flush()?;
+	loop {
+		match read() {
+			Ok(Event::Key(KeyEvent {
+				code : KeyCode::Char('p'), .. 
+			})) | Ok(Event::Key(KeyEvent {
+				code : KeyCode::Esc, ..
+			})) => break,
+			_ => ()
+		}
+	}
 	Ok(())
 }
 
@@ -371,6 +405,7 @@ fn handle_key(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Option<Blo
 						while move_block(board, b, 0, 1) {}
 						KeyAction::Drop(true)
 					},
+					(KeyCode::Char('p'), _) => KeyAction::Pause,
 					_ => KeyAction::None
 			},
 			_ => KeyAction::None
@@ -436,6 +471,13 @@ fn main() -> Result<()> {
 				KeyAction::Exit => {
 					running = false;
 					break;
+				},
+				KeyAction::Pause => {
+					let remaining = active_delay - time.elapsed();
+					pause()?;
+					print_board(&board, &block, use_color)?;
+					print_ui(&next_block, score, line_clears, level, delay, use_color)?;
+					time = Instant::now() - remaining;
 				},
 				KeyAction::Move(true) => {
 					if let Some(actions_left) = lock_actions{

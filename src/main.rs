@@ -240,9 +240,12 @@ fn add_score(rows : usize, level : &mut usize, score : &mut usize, cleared_rows 
 	};
 	if *cleared_rows >= target_rows {
 		*level += 1;
-		*delay = Duration::from_millis(827 - 27 * (*level as u64));
+		let base : f64 = 1.142;
+		let pw = 800.0 * base * base.powi(-(*level as i32));
+		*delay = Duration::from_millis(pw as u64);
 	}
-}
+}// A * B ^ (-1) == 800 <=> -1 == log(B, 800 / A) <=> A / B == 800 <=> A == 800B
+// A * B ^ (-30) == 17 <=> -30 == log(800A, 17 / A) 
 
 fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>, use_color : bool) -> Result<()>{
 	queue!(stdout(), cursor::MoveTo(0, 0))?;

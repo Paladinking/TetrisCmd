@@ -381,6 +381,9 @@ fn print_game_over(score : usize, level : usize) -> Result<bool> {
 				code : KeyCode::Esc, ..
 			})) => break Ok(false),
 			Ok(Event::Key(KeyEvent {
+				code : KeyCode::Char('R'), ..
+			})) |
+			Ok(Event::Key(KeyEvent {
 				code : KeyCode::Char('r'), ..
 			})) => break Ok(true),
 			_ => ()
@@ -399,6 +402,7 @@ fn handle_key(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Option<Blo
 			})) => match (keycode, block.as_mut()) {
 					(KeyCode::Esc, _) => KeyAction::Exit,
 					(KeyCode::Up, Some(block)) => KeyAction::Move(rotate(&board, block, rotation_dir)),
+					(KeyCode::Char('Z'), Some(block)) |
 					(KeyCode::Char('z'), Some(block)) => KeyAction::Move(rotate(&board, block, !rotation_dir)),
 					(KeyCode::Down, _) => KeyAction::Drop(false),
 					(KeyCode::Left, Some(block)) => KeyAction::Move(move_block(&board, block, -1, 0)),

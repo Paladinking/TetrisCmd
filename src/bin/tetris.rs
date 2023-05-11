@@ -10,7 +10,7 @@ use crossterm::{
 };
 use rand::{thread_rng, seq::SliceRandom};
 
-const WIDTH : usize = 8;
+const WIDTH : usize = 15;
 const HEIGHT : usize = 22;
 
 #[derive(Debug, Copy, Clone)]
@@ -250,7 +250,13 @@ fn add_score(rows : usize, level : &mut usize, score : &mut usize, cleared_rows 
 
 fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>, use_color : bool) -> Result<()>{
 	queue!(stdout(), cursor::MoveTo(0, 0))?;
-	print!("##################");
+    let mut edge = String::from("##");
+    for _ in 0..WIDTH {
+        edge.push('#');
+        edge.push('#');
+    }
+
+	print!("{}", edge);
 	queue!(stdout(), cursor::MoveToNextLine(1))?;
 	for (y, row) in board.iter().enumerate() {
 		print!("#");
@@ -286,20 +292,20 @@ fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>
 		print!("#");
 		queue!(stdout(), cursor::MoveToNextLine(1))?;
 	}
-	print!("##################");
+	print!("{}", edge);
 	execute!(stdout(), cursor::MoveToNextLine(1))?;
 	Ok(())
 }
 
 fn print_ui(block : &Block, score : usize, rows : usize, level : usize, delay : Duration, use_color : bool) -> Result<()> {
-	queue!(stdout(), cursor::MoveTo(20, 0))?;
+    queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 12, 0))?;
 	print!("NEXT:");
-	queue!(stdout(), cursor::MoveTo(18, 2))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 10, 2))?;
 	for _ in 0..5{
 		print!("                 ");
-		queue!(stdout(), cursor::MoveToColumn(18), cursor::MoveDown(1))?;
+		queue!(stdout(), cursor::MoveToColumn(WIDTH as u16 + 10), cursor::MoveDown(1))?;
 	}
-	queue!(stdout(), cursor::MoveTo(18, 2))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 10, 2))?;
 	for row in &block.tiles[block.rotation] {
 		print!("  ");
 		for col in row {
@@ -314,33 +320,33 @@ fn print_ui(block : &Block, score : usize, rows : usize, level : usize, delay : 
 			}
 			
 		}
-		queue!(stdout(), cursor::MoveToColumn(18), cursor::MoveDown(1))?;
+		queue!(stdout(), cursor::MoveToColumn(WIDTH as u16 + 10), cursor::MoveDown(1))?;
 	}
-	queue!(stdout(), cursor::MoveTo(19, 8))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 8))?;
 	print!("Score: {}", score);
-	queue!(stdout(), cursor::MoveTo(19, 9))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 9))?;
 	print!("Level: {}", level);
-	queue!(stdout(), cursor::MoveTo(19, 10))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 10))?;
 	print!("Lines: {}", rows);
-	queue!(stdout(), cursor::MoveTo(19, 11))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 11))?;
 	print!("Delay: {:?}", delay);
-	queue!(stdout(), cursor::MoveTo(23, 13))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 15, 13))?;
 	print!("Controls:");
-	queue!(stdout(), cursor::MoveTo(19, 15))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 15))?;
 	print!("Rotate clockwise : Up arrow");
-	queue!(stdout(), cursor::MoveTo(19, 16))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 16))?;
 	print!("Rotate counter-clockwise : Z");
-	queue!(stdout(), cursor::MoveTo(19, 17))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 17))?;
 	print!("Soft drop : Down arrow");
-	queue!(stdout(), cursor::MoveTo(19, 18))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 18))?;
 	print!("Hard drop : Space");
-	queue!(stdout(), cursor::MoveTo(19, 19))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 19))?;
 	print!("Move left : Left arrow");
-	queue!(stdout(), cursor::MoveTo(19, 20))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 20))?;
 	print!("Move right : Right arrow");
-	queue!(stdout(), cursor::MoveTo(19, 21))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 21))?;
 	print!("Pause : P");
-	queue!(stdout(), cursor::MoveTo(19, 22))?;
+	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 22))?;
 	print!("Exit : Esc");
 	stdout().flush()?;
 	Ok(())
@@ -558,4 +564,12 @@ pub fn start() -> Result<()> {
 	execute!(stdout(), LeaveAlternateScreen, cursor::Show)?;
 	terminal::disable_raw_mode()?;
 	Ok(())
+}
+
+
+fn main() {
+    match start() {
+        Ok(_) => (),
+        Err(e) => println!("{:?}", e)
+    }
 }

@@ -10,7 +10,7 @@ use crossterm::{
 };
 use rand::{thread_rng, seq::SliceRandom};
 
-const WIDTH : usize = 15;
+const WIDTH : usize = 8;
 const HEIGHT : usize = 22;
 
 #[derive(Debug, Copy, Clone)]
@@ -298,14 +298,14 @@ fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>
 }
 
 fn print_ui(block : &Block, score : usize, rows : usize, level : usize, delay : Duration, use_color : bool) -> Result<()> {
-    queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 12, 0))?;
+    queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 4, 0))?;
 	print!("NEXT:");
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 10, 2))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 2, 2))?;
 	for _ in 0..5{
 		print!("                 ");
-		queue!(stdout(), cursor::MoveToColumn(WIDTH as u16 + 10), cursor::MoveDown(1))?;
+		queue!(stdout(), cursor::MoveToColumn(2 * WIDTH as u16 + 2), cursor::MoveDown(1))?;
 	}
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 10, 2))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 2, 2))?;
 	for row in &block.tiles[block.rotation] {
 		print!("  ");
 		for col in row {
@@ -320,33 +320,33 @@ fn print_ui(block : &Block, score : usize, rows : usize, level : usize, delay : 
 			}
 			
 		}
-		queue!(stdout(), cursor::MoveToColumn(WIDTH as u16 + 10), cursor::MoveDown(1))?;
+		queue!(stdout(), cursor::MoveToColumn(2 * WIDTH as u16 + 2), cursor::MoveDown(1))?;
 	}
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 8))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 8))?;
 	print!("Score: {}", score);
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 9))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 9))?;
 	print!("Level: {}", level);
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 10))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 10))?;
 	print!("Lines: {}", rows);
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 11))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 11))?;
 	print!("Delay: {:?}", delay);
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 15, 13))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 7, 13))?;
 	print!("Controls:");
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 15))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 15))?;
 	print!("Rotate clockwise : Up arrow");
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 16))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 16))?;
 	print!("Rotate counter-clockwise : Z");
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 17))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 17))?;
 	print!("Soft drop : Down arrow");
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 18))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 18))?;
 	print!("Hard drop : Space");
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 19))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 19))?;
 	print!("Move left : Left arrow");
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 20))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 20))?;
 	print!("Move right : Right arrow");
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 21))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 21))?;
 	print!("Pause : P");
-	queue!(stdout(), cursor::MoveTo(WIDTH as u16 + 11, 22))?;
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 22))?;
 	print!("Exit : Esc");
 	stdout().flush()?;
 	Ok(())

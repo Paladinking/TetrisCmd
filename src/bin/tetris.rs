@@ -1,14 +1,14 @@
-use std::{env, io::{stdout, Write}, time::{Instant, Duration}};
+use std::{env, fs, io::{stdout, Write}, time::{Instant, Duration}};
 use crossterm::{
 	execute,
-	queue,
-	Result, 
-	terminal::{self, ClearType, LeaveAlternateScreen, EnterAlternateScreen},
+	queue, 
+	terminal::{self, ClearType},
 	cursor, 
-	event::{poll, read, Event, KeyEvent, KeyCode},
+	event::{self, Event, KeyEvent, KeyCode},
 	style::{Color, Stylize}
 };
-use rand::{thread_rng, seq::SliceRandom};
+use rand::{self, seq::SliceRandom};
+use dirs;
 
 const WIDTH : usize = 8;
 const HEIGHT : usize = 22;
@@ -195,7 +195,7 @@ fn freeze(board : &mut [[Option<Color>; WIDTH]; HEIGHT], block : &Block) -> usiz
 	cleared_rows
 }
 
-fn add_score(rows : usize, level : &mut usize, score : &mut usize, cleared_rows : &mut usize, delay : &mut Duration) {
+fn add_score(rows : usize, level : &mut usize, highscore: &mut usize, score : &mut usize, cleared_rows : &mut usize, delay : &mut Duration) {
 	if rows == 0 { 
 		return; 
 	}
@@ -207,6 +207,9 @@ fn add_score(rows : usize, level : &mut usize, score : &mut usize, cleared_rows 
 		4 => 800,
 		_ => unreachable!("Not possible to clear more than 4 rows")
 	};
+	if score > highscore {
+		*highscore = *score;
+	}
 	*cleared_rows += rows;
 	let target_rows = match *level {
 		1 => 10,
@@ -248,13 +251,15 @@ fn add_score(rows : usize, level : &mut usize, score : &mut usize, cleared_rows 
 	}
 }
 
-fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>, use_color : bool) -> Result<()>{
+fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>, use_color : bool) -> crossterm::Result<()>{
 	queue!(stdout(), cursor::MoveTo(0, 0))?;
     let mut edge = String::from("##");
-    for _ in 0..WIDTH {
+    for _ in 0..(WIDTH - 1) {
         edge.push('#');
         edge.push('#');
     }
+	edge.push('#');
+	edge.push('#');
 
 	print!("{}", edge);
 	queue!(stdout(), cursor::MoveToNextLine(1))?;
@@ -292,12 +297,19 @@ fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>
 		print!("#");
 		queue!(stdout(), cursor::MoveToNextLine(1))?;
 	}
+	edge = String::from("##");
+    for _ in 0..(WIDTH - 1) {
+        edge.push('#');
+        edge.push('#');
+    }
+	edge.push('#');
+	edge.push('#');
 	print!("{}", edge);
 	execute!(stdout(), cursor::MoveToNextLine(1))?;
 	Ok(())
 }
 
-fn print_ui(block : &Block, score : usize, rows : usize, level : usize, delay : Duration, use_color : bool) -> Result<()> {
+fn print_ui(block : &Block, highscore: usize, score : usize, rows : usize, level : usize, delay : Duration, use_color : bool) -> crossterm::Result<()> {
     queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 4, 0))?;
 	print!("NEXT:");
 	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 2, 2))?;
@@ -322,6 +334,8 @@ fn print_ui(block : &Block, score : usize, rows : usize, level : usize, delay : 
 		}
 		queue!(stdout(), cursor::MoveToColumn(2 * WIDTH as u16 + 2), cursor::MoveDown(1))?;
 	}
+	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 6))?;
+	print!("Highscore: {}", highscore);
 	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 8))?;
 	print!("Score: {}", score);
 	queue!(stdout(), cursor::MoveTo(2 * WIDTH as u16 + 3, 9))?;
@@ -352,13 +366,15 @@ fn print_ui(block : &Block, score : usize, rows : usize, level : usize, delay : 
 	Ok(())
 }
 
-fn pause() -> Result<()> {
+fn pause() -> crossterm::Result<()> {
 	queue!(stdout(), cursor::MoveTo(2, 10), terminal::Clear(ClearType::All))?;
 	print!("Game is Paused");
 	stdout().flush()?;
 	loop {
-		match read() {
+		match event::read() {
 			Ok(Event::Key(KeyEvent {
+				code : KeyCode::Char('P'), .. 
+			})) | Ok(Event::Key(KeyEvent {
 				code : KeyCode::Char('p'), .. 
 			})) | Ok(Event::Key(KeyEvent {
 				code : KeyCode::Esc, ..
@@ -369,7 +385,7 @@ fn pause() -> Result<()> {
 	Ok(())
 }
 
-fn print_game_over(score : usize, level : usize) -> Result<bool> {
+fn print_game_over(score : usize, level : usize) -> crossterm::Result<bool> {
 	queue!(stdout(), terminal::Clear(ClearType::All), cursor::MoveTo(10, 3))?;
 	print!("Game Over");
 	queue!(stdout(), cursor::MoveTo(10, 5))?;
@@ -382,7 +398,7 @@ fn print_game_over(score : usize, level : usize) -> Result<bool> {
 	print!("Press esc to exit");
 	stdout().flush()?;
 	let res = loop {
-		match read() {
+		match event::read() {
 			Ok(Event::Key(KeyEvent {
 				code : KeyCode::Esc, ..
 			})) => break Ok(false),
@@ -400,8 +416,8 @@ fn print_game_over(score : usize, level : usize) -> Result<bool> {
 }
 
 fn handle_key(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Option<Block>, rotation_dir : bool) -> KeyAction {
-	if let Ok(true) = poll(Duration::from_millis(1)) {
-		let event = read();
+	if let Ok(true) = event::poll(Duration::from_millis(1)) {
+		let event = event::read();
 		match event {
 			Ok(Event::Key(KeyEvent {
 				code : keycode, ..
@@ -413,10 +429,11 @@ fn handle_key(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Option<Blo
 					(KeyCode::Down, _) => KeyAction::Drop(false),
 					(KeyCode::Left, Some(block)) => KeyAction::Move(move_block(&board, block, -1, 0)),
 					(KeyCode::Right, Some(block)) => KeyAction::Move(move_block(&board, block, 1, 0)),
-					(KeyCode::Char(' '), Some(b)) => {
-						while move_block(board, b, 0, 1) {}
+					(KeyCode::Char(' '), Some(block)) => {
+						while move_block(board, block, 0, 1) {}
 						KeyAction::Drop(true)
 					},
+					(KeyCode::Char('P'), _) |
 					(KeyCode::Char('p'), _) => KeyAction::Pause,
 					_ => KeyAction::None
 			},
@@ -427,18 +444,45 @@ fn handle_key(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &mut Option<Blo
 	}
 }
 
+fn read_highscore() -> usize {
+	if let Some(mut score_path) = dirs::home_dir() {
+		score_path.push(".tetris-highscore");
+		if let Ok(score_bytes) = fs::read(score_path) {
+			if score_bytes.len() != (usize::BITS / 8) as usize {
+				return 0;
+			}
+			return score_bytes.into_iter().enumerate().fold(0, |score, (i, b)| (score << 8) + b.wrapping_add(5 * i as u8) as usize);
+		}
+	}
+	return 0;
+}
 
-pub fn start() -> Result<()> {
+fn write_highscore(highscore: usize) {
+	if let Some(mut score_path) = dirs::home_dir() {
+		score_path.push(".tetris-highscore");
+		let out : Vec<u8> = highscore.to_be_bytes().iter().enumerate().map(|(i, b)| b.wrapping_sub(i as u8 * 5)).collect();
+		let _ = fs::write(score_path, out);
+	}
+}
+ 
+
+pub fn start() -> crossterm::Result<()> {
+	
 	let use_color = !env::args().any(|s| s == "--no-color");
 	let inverse_rotation = env::args().any(|s| s == "--inverse-rotation");
+	let update_highscore = !env::args().any(|s| s == "--no-highscore");
+	let reset_highscore = env::args().any(|s| s == "--reset-highscore");
 
-	let mut rng = thread_rng();
+	let mut rng = rand::thread_rng();
 	terminal::enable_raw_mode()?;
 	execute!(stdout(), 
-		EnterAlternateScreen,
+		terminal::EnterAlternateScreen,
 		cursor::Hide,
 		terminal::Clear(ClearType::All)
 	)?;
+	
+	let mut highscore = if reset_highscore {0} else {read_highscore()};
+	
 	let mut bag = [BlockType::I, BlockType::J, BlockType::L, BlockType::O, BlockType::S, BlockType::T, BlockType::Z];
 	let mut bag_index = 1;
 	bag.shuffle(&mut rng);
@@ -465,7 +509,7 @@ pub fn start() -> Result<()> {
 	let mut level = 1;
 
 	let mut lock_actions = None;
-	print_ui(&next_block, score, line_clears, level, delay, use_color)?;
+	print_ui(&next_block, highscore, score, line_clears, level, delay, use_color)?;
 	while running {
 		print_board(&board, &block, use_color)?;
 		time = Instant::now();
@@ -489,7 +533,7 @@ pub fn start() -> Result<()> {
 					let remaining = active_delay - time.elapsed();
 					pause()?;
 					print_board(&board, &block, use_color)?;
-					print_ui(&next_block, score, line_clears, level, delay, use_color)?;
+					print_ui(&next_block, highscore, score, line_clears, level, delay, use_color)?;
 					time = Instant::now() - remaining;
 				},
 				KeyAction::Move(true) => {
@@ -514,7 +558,7 @@ pub fn start() -> Result<()> {
 				KeyAction::Drop(true) => {
 					lock_actions = None;
 					let rows = freeze(&mut board, &block.unwrap());
-					add_score(rows, &mut level, &mut score, &mut line_clears, &mut delay);
+					add_score(rows, &mut level, &mut highscore, &mut score, &mut line_clears, &mut delay);
 					block = None;
 					break;
 				}
@@ -524,7 +568,7 @@ pub fn start() -> Result<()> {
 		if let Some(_) = lock_actions {
 			if !move_block(&board, block.as_mut().unwrap(), 0, 1) {
 				let rows = freeze(&mut board, &block.unwrap());
-				add_score(rows, &mut level, &mut score, &mut line_clears, &mut delay);
+				add_score(rows, &mut level, &mut highscore, &mut score, &mut line_clears, &mut delay);
 				block = None;
 			}
 			lock_actions = None;
@@ -550,7 +594,7 @@ pub fn start() -> Result<()> {
 					delay = Duration::from_millis(800);
 					soft_drop = false;
 					board = [[None; WIDTH]; HEIGHT];
-					print_ui(&next_block, score, line_clears, level, delay, use_color)?;
+					print_ui(&next_block, highscore, score, line_clears, level, delay, use_color)?;
 					continue;
 				} else {
 					break;
@@ -558,10 +602,14 @@ pub fn start() -> Result<()> {
 			}
 			block = Some(next_block);
 			next_block = create_block(bag[bag_index]);
-			print_ui(&next_block, score, line_clears, level, delay, use_color)?;
+			print_ui(&next_block, highscore, score, line_clears, level, delay, use_color)?;
 		}	
 	}
-	execute!(stdout(), LeaveAlternateScreen, cursor::Show)?;
+	if update_highscore {
+		write_highscore(highscore);
+	}
+	
+	execute!(stdout(), terminal::LeaveAlternateScreen, cursor::Show)?;
 	terminal::disable_raw_mode()?;
 	Ok(())
 }

@@ -211,44 +211,48 @@ fn add_score(rows : usize, level : &mut usize, highscore: &mut usize, score : &m
 		*highscore = *score;
 	}
 	*cleared_rows += rows;
-	let target_rows = match *level {
-		1 => 10,
-		2 => 30,
-		3 => 70,
-		4 => 120,
-		5 => 180,
-		6 => 250,
-		7 => 330,
-		8 => 420,
-		9 => 520,
-		10 => 620,
-		11 => 720,
-		12 => 820,
-		13 => 920,
-		14 => 1020,
-		15 => 1120,
-		16 => 1230,
-		17 => 1350,
-		18 => 1480,
-		19 => 1620,
-		20 => 1770,
-		21 => 1930,
-		22 => 2100,
-		23 => 2280,
-		24 => 2470,
-		25 => 2670,
-		26 => 2870,
-		27 => 3070,
-		28 => 3270,
-		29 => usize::MAX,
-		_ => unreachable!("Invalid level")
-	};
-	if *cleared_rows >= target_rows {
-		*level += 1;
-		let base : f64 = 1.142;
-		let pw = 800.0 * base * base.powi(-(*level as i32));
-		*delay = Duration::from_millis(pw as u64);
-	}
+        loop {
+            let target_rows = match *level {
+                    1 => 10,
+                    2 => 30,
+                    3 => 70,
+                    4 => 120,
+                    5 => 180,
+                    6 => 250,
+                    7 => 330,
+                    8 => 420,
+                    9 => 520,
+                    10 => 620,
+                    11 => 720,
+                    12 => 820,
+                    13 => 920,
+                    14 => 1020,
+                    15 => 1120,
+                    16 => 1230,
+                    17 => 1350,
+                    18 => 1480,
+                    19 => 1620,
+                    20 => 1770,
+                    21 => 1930,
+                    22 => 2100,
+                    23 => 2280,
+                    24 => 2470,
+                    25 => 2670,
+                    26 => 2870,
+                    27 => 3070,
+                    28 => 3270,
+                    29 => usize::MAX,
+                    _ => unreachable!("Invalid level")
+            };
+            if *cleared_rows >= target_rows {
+                    *level += 1;
+                    let base : f64 = 1.142;
+                    let pw = 800.0 * base * base.powi(-(*level as i32));
+                    *delay = Duration::from_millis(pw as u64);
+            } else {
+                break;
+            }
+        }
 }
 
 fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>, use_color : bool) -> crossterm::Result<()>{

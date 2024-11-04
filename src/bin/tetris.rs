@@ -280,8 +280,8 @@ fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>
 				{
 					if let Some(color) = tiles[(yi - b.y_pos) as usize][(xi - b.x_pos) as usize] {
 						if use_color {
-							print!("{}", "██".with(color));
-						} else {
+							print!("{}", "██".with(color).on(color));
+                                                } else {
 							print!("▓▓");
 						}
 						continue;
@@ -290,7 +290,7 @@ fn print_board(board : &[[Option<Color>; WIDTH]; HEIGHT], block : &Option<Block>
 			}
 			if let Some(color) = *c {
 				if use_color {
-					print!("{}", "██".with(color));
+					print!("{}", "██".with(color).on(color));
 				} else {
 					print!("██");
 				}
@@ -327,7 +327,7 @@ fn print_ui(block : &Block, highscore: usize, score : usize, rows : usize, level
 		for col in row {
 			if let Some(color) = col {
 				if use_color {
-					print!("{}", "██".with(*color));
+					print!("{}", "██".with(*color).on(*color));
 				} else {
 					print!("▓▓");
 				}

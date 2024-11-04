@@ -527,14 +527,19 @@ pub fn start() -> crossterm::Result<()> {
 		} else {
 			active_delay = delay;
 		}
-		while time.elapsed() < active_delay {
+		loop {
+                        let passed = time.elapsed();
+                        if passed >= active_delay {
+                            break;
+                        }
+
 			match handle_key(&board, &mut block, !inverse_rotation) {
 				KeyAction::Exit => {
 					running = false;
 					break;
 				},
 				KeyAction::Pause => {
-					let remaining = active_delay - time.elapsed();
+					let remaining = active_delay - passed;
 					pause()?;
 					print_board(&board, &block, use_color)?;
 					print_ui(&next_block, highscore, score, line_clears, level, delay, use_color)?;
